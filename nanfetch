@@ -1,0 +1,155 @@
+#!/bin/bash
+source /etc/os-release
+
+if [ -n "$1" ]; then
+	ID="$1"
+fi
+
+if [ -n "$BASH_VERSION" ]; then
+    SHELL="Bash ${BASH_VERSION%%(*}"
+elif [ -n "$ZSH_VERSION" ]; then
+    SHELL="Zsh $ZSH_VERSION"
+elif [ -n "$FISH_VERSION" ]; then
+    SHELL="Fish $FISH_VERSION"
+elif [ -n "$KSH_VERSION" ]; then
+    SHELL="Ksh $KSH_VERSION"
+else
+    sname=$(basename "$0" 2>/dev/null || echo "$0")
+    case "$sname" in
+        *dash*)
+            version=$(dash -v 2>&1 | head -n 1)
+            SHELL="Dash ${version##* }"
+            ;;
+        *ash*)
+            SHELL="Ash ($0)"
+            ;;
+        *)
+            SHELL="$sname"
+            ;;
+    esac
+fi
+
+case "$ID" in
+       gentoo)
+	color="\e[1;35m"
+	ascii=$(cat <<- 'EOF'
+   _-----_
+ /         \
+/           \
+\     /\     \
+ \_   \/      \
+  _=-         -|
+ /            /
+/            /
+\           /
+ \_________/
+EOF
+) ;;
+       arch)
+	color="\e[1;34m"
+	ascii=$(cat <<- 'EOF'
+       /\
+      /  \
+     /    \
+    /\_    \
+   /        \
+  /    __  -_\
+ /    |  |    \
+/__--='  '=--__\
+EOF
+) ;;
+       generatix)
+	color="\e[1;37m"
+	ascii=$(cat <<- 'EOF'
+  .---------.
+ /           \
+/   .----.    \
+|  /  __  \    \
+|  | |_ \  |   |
+|  '-__|/  |   |
+\      |   |   |
+ '-____|_-'   /
+       |     /
+       |___-'
+EOF
+) ;;
+       *)
+	color="\e[1;37m"
+	ascii="" ;;
+esac
+coolnam="${color}${USER}\e[0m@${color}${HOSTNAME}\e[0m"
+totmem=$(free -h | awk '/Mem:/ {print $2 " / " $3}')
+
+#this is long, its wm detecting
+wms=(
+    "i3" "awesome" "openbox" "bspwm" "xmonad" "dwm" "fluxbox" 
+    "icewm" "fvwm" "herbstluftwm" "spectrwm" "qtile" "ratpoison" 
+    "stumpwm" "wmaker" "enlightenment" "compiz" "jwm" "leftwm" 
+    "notion" "2bwm" "exwm" "sawfish" "pekwm" "matchbox-window-manager" "xfwm4" 
+)
+psax=$(ps -e -o comm=)
+wm="Unknown"
+
+for candidate in "${wms[@]}"; do
+    if echo "$psax" | grep -qx "$candidate"; then
+        wm="$candidate"
+        break
+    fi
+done
+
+if [[ "$wm" == "wmaker" ]]; then
+    wm="Window Maker"
+elif [[ "$wm" == "matchbox-window-manager" ]]; then
+    wm="Matchbox"
+elif [[ "$wm" == "i3" ]]; then
+    wm="i3wm"
+fi
+
+color1=""
+color2=""
+for i in {0..7}; do
+    color1+="\e[4${i}m   \e[0m"
+    color2+="\e[10${i}m   \e[0m"
+done
+
+info=$(cat << EOF
+$coolnam
+\e[0m-------------------
+${color}OS\e[0m: $PRETTY_NAME $(uname -m)
+${color}Kernel\e[0m: $(uname -r)
+${color}Host\e[0m: $(cat /sys/devices/virtual/dmi/id/board_name)
+${color}Shell\e[0m: $SHELL
+${color}WM\e[0m: $wm
+${color}CPU\e[0m: $(uname -p)
+${color}GPU\e[0m: $(lspci | grep VGA | sed -E 's/.*: //; s/ Corporation//; s/ \(rev .*\)//')
+${color}Memory\e[0m: $totmem
+
+${color1}
+${color2}
+EOF
+)
+
+mapfile -t mapascii <<< "$ascii"
+mapfile -t mapinf <<< "$info"
+
+mlines=${#mapascii[@]}
+if [ ${#mapinf[@]} -gt ${#mapascii[@]} ]; then
+	mlines=${#mapinf[@]}
+fi
+
+mlen=0
+for line in "${mapascii[@]}"; do
+    clean_line=$(printf "%b" "$line" | sed 's/\x1b\[[0-9;]*m//g')
+    len=${#clean_line}
+    if (( len > mlen )); then
+        mlen=$len
+    fi
+done
+(( mlen += 4 ))
+
+i=0
+while [ $i -le $mlines ]; do
+	printf "%b" "${color}${mapascii[i]}"
+	printf "\e[${mlen}G%b\n" "${mapinf[i]}\e[0m"
+	((i++))
+done
